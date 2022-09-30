@@ -5,15 +5,14 @@ This program iterates over all k-cliques.
 This is an improvement of the 1985 algorithm of Chiba And Nishizeki detailed in "Arboricity and subgraph listing".
 
 To compile:
-"gcc kClist.c -O9 -o kClist".
+"gcc graph.c -O9 -o graph".
 
 To execute:
-"./kClist k edgelist.txt".
+"./graph k edgelist.txt attribute.txt".
 "edgelist.txt" should contain the graph: one edge on each line separated by a space.
+"attribute.txt" should contain the attribute along with the vertice
 Will print the number of k-cliques.
 */
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -36,20 +35,22 @@ typedef struct {
 typedef struct {
 	unsigned n; // # of nodes
 	unsigned e; // # of edges
-	edge* edges; // array of edges
+	edge* edges; // array of edges: size of e
 
-    unsigned* attributes; // the attribute dynamic array for nodes
-    unsigned attr_dimension; // attribute set dimension in graph, mainly 2D
+    unsigned* attributes; // the attribute dynamic array for nodes: size of n
+    unsigned attr_dimension; // attribute set dimension in graph, mainly will be 2D
 
-	unsigned* ns; // ns[l]: number of nodes in G_l
+	unsigned* ns; // ns[l]: number of nodes in G_l: sie
 	unsigned** d; // d[l]: degrees of G_l
-	unsigned* cd; // cumulative degree: (starts with 0) length=n+1
+	unsigned* cd; // cumulative degree: (starts with 0) length = n+1
 	unsigned* adj; // truncated list of neighbors
 	unsigned* rank; // ranking of the nodes according to degeneracy ordering
 	//unsigned *map;// oldID newID correspondance
 
 	unsigned char* lab; // lab[i] label of node i
 	unsigned** sub; //sub[l]: nodes in G_l
+
+	int** resultSet; // results containing the cliques
 } graph;
 
 void free_graph(graph* g, unsigned char k){
@@ -67,12 +68,12 @@ void free_graph(graph* g, unsigned char k){
 }
 
 // Compute the maximum of three unsigned integers.
-inline unsigned int max3(unsigned int a,unsigned int b,unsigned int c) {
+unsigned max3(unsigned int a,unsigned int b,unsigned int c) {
 	a = (a > b) ? a : b;
 	return (a > c) ? a : c;
 }
 
-// Read attribute File
+// read attributes of vertices from file
 void read_attribute_file(graph* g, char* attr_file) {
     g->attributes = malloc(g->n * sizeof(int));
     FILE* f = fopen(attr_file, "r");
@@ -100,6 +101,7 @@ void read_attribute_file(graph* g, char* attr_file) {
     return;
 }
 
+// read edgeList from file
 graph* read_edgelist(char* edgelist, char* attr_file){
 	unsigned e1 = NLINKS;	// maximum number of edges, will increase if needed
 	graph* g = malloc(sizeof(graph));
@@ -121,25 +123,24 @@ graph* read_edgelist(char* edgelist, char* attr_file){
 	fclose(file);
 	g->n++;	// node index starts from 0, thus +1 needed
 	g->edges = realloc(g->edges, g->e * sizeof(edge));	// realloc the space to accommodate g->e(updated) # of edges !
-
-    read_attribute_file(g, attr_file); // fill in attributes array in graph
-
+    
+	read_attribute_file(g, attr_file); // fill in attributes array in graph
 	return g;
 }
 
+// relabled as DAG 
 void relabel(graph* g){
-	unsigned i, source, target, tmp;
-
-	for (i=0;i<g->e;i++) {
-		source=g->rank[g->edges[i].s];
-		target=g->rank[g->edges[i].t];
-		if (source<target){
-			tmp=source;
-			source=target;
-			target=tmp;
+	unsigned source, target, tmp;
+	for (unsigned i = 0; i < g->e; i++) {
+		source = g->rank[g->edges[i].s];
+		target = g->rank[g->edges[i].t];
+		if (source < target){
+			tmp = source;
+			source = target;
+			target = tmp;
 		}
-		g->edges[i].s=source;
-		g->edges[i].t=target;
+		g->edges[i].s = source;
+		g->edges[i].t = target;
 	}
 }
 
@@ -149,7 +150,7 @@ typedef struct {
 	unsigned value;
 } keyvalue;
 
-// Building the heap structure with (key, value)=(node, degree) for each node
+// Building the heap structure with (key, value) = (node, degree) for each node
 typedef struct {
 	unsigned n_max;	// max number of nodes
 	unsigned n;	// number of nodes
@@ -230,7 +231,7 @@ keyvalue pop_min(bheap* heap){
 	return min;
 }
 
-// Building the heap structure with (key, value)=(node, degree) for each node
+// Building the heap structure with (key, value) = (node, degree) for each node
 bheap* mk_heap(unsigned n, unsigned* degrees){
 	keyvalue kv;
 	bheap* heap = construct(n);
@@ -248,16 +249,16 @@ void freeheap(bheap* heap){
 	free(heap);
 }
 
-// computing degeneracy ordering and core value
+// computing degeneracy ordering and core value for each vertice
 void ord_core(graph* g){
 	unsigned i, j, r = 0;
 	unsigned n = g->n;
 	keyvalue kv;
 	bheap* heap;
 
-	unsigned* d0 = calloc(g->n, sizeof(unsigned));
+	unsigned* d0 = calloc(g->n, sizeof(unsigned));	// allocate space and initialize all to 0
 	unsigned* cd0 = malloc((g->n + 1) * sizeof(unsigned));	// ???
-	unsigned* adj0 = malloc(2 * (g->e) * sizeof(unsigned));	// ???
+	unsigned* adj0 = malloc(2 * (g->e) * sizeof(unsigned));	// store the neighbors of each vertices, thus need 2E space
 
 	// fill in the degrees of each vertice in undirected graph
 	for (i = 0; i < g->e; i++) {
@@ -294,38 +295,34 @@ void ord_core(graph* g){
 }
 
 //////////////////////////
-//Building the special graph structure
-void mkspecial(graph* g, unsigned char k){
-	unsigned i, ns, max;
-	unsigned* d;
-	unsigned* sub;
-	unsigned char* lab;
+// Building the special graph structure
+void mkspecial(graph* g, unsigned char k) {
+	
+	unsigned* d = calloc(g->n, sizeof(unsigned));
 
-	d=calloc(g->n,sizeof(unsigned));
-
-	for (i=0;i<g->e;i++) {
+	for (unsigned i = 0; i < g->e; i++) {
 		d[g->edges[i].s]++;
 	}
 
-	g->cd=malloc((g->n+1)*sizeof(unsigned));
-	ns=0;
-	g->cd[0]=0;
-	max=0;
-	sub=malloc(g->n*sizeof(unsigned));
-	lab=malloc(g->n*sizeof(unsigned char));
-	for (i=1;i<g->n+1;i++) {
-		g->cd[i]=g->cd[i-1]+d[i-1];
-		max=(max>d[i-1])?max:d[i-1];
-		sub[ns++]=i-1;
-		d[i-1]=0;
-		lab[i-1]=k;
+	g->cd = malloc((g->n + 1) * sizeof(unsigned));
+	unsigned ns = 0;
+	g->cd[0] = 0;
+	unsigned max = 0;
+	unsigned* sub = malloc(g->n * sizeof(unsigned));
+	unsigned char* lab = malloc(g->n * sizeof(unsigned char));
+	for (unsigned i = 1; i < g->n + 1; i++) {
+		g->cd[i] = g->cd[i - 1] + d[i - 1];
+		max = (max > d[i - 1]) ? max : d[i - 1];
+		sub[ns++] = i - 1;
+		d[i - 1] = 0;
+		lab[i - 1] = k;
 	}
 	printf("max degree = %u\n",max);
 	fflush(stdout);
 
 	g->adj=malloc(g->e*sizeof(unsigned));
 
-	for (i=0;i<g->e;i++) {
+	for (unsigned i = 0; i < g->e; i++) {
 		g->adj[ g->cd[g->edges[i].s] + d[ g->edges[i].s ]++ ]=g->edges[i].t;
 	}
 	free(g->edges);
@@ -335,70 +332,76 @@ void mkspecial(graph* g, unsigned char k){
 
 	g->d=malloc((k+1)*sizeof(unsigned*));
 	g->sub=malloc((k+1)*sizeof(unsigned*));
-	for (i=2;i<k;i++){
-		g->d[i]=malloc(g->n*sizeof(unsigned));
-		g->sub[i]=malloc(max*sizeof(unsigned));
+	for (unsigned i = 2; i < k; i++){
+		g->d[i] = malloc(g->n*sizeof(unsigned));
+		g->sub[i] = malloc(max*sizeof(unsigned));
 	}
-	g->d[k]=d;
-	g->sub[k]=sub;
+	g->d[k] = d;
+	g->sub[k] = sub;
 
-	g->lab=lab;
+	g->lab = lab;
 }
 
 
 // n stored the number of k-cliques
 void kclique(unsigned l, graph* g, unsigned long long* n) {
-	unsigned i, j, k, end, u, v, w;
+	unsigned end, u, v, w;
 
-	if(l==2){
-		for(i=0; i<g->ns[2]; i++){//list all edges
-			u=g->sub[2][i];
+
+	if (l == 2){
+		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
+			u = g->sub[2][i];
+			printf("u is %d\n", u);
+			// printf("cd[u] is %d\n", g->cd[u]);
+			// printf("d[2][u] is %d\n", g->d[2][u]);
 			//(*n)+=g->d[2][u];
-			end=g->cd[u]+g->d[2][u];
-			for (j=g->cd[u];j<end;j++) {
-				(*n)++;//listing here!!!  // NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only); !!!!!!!!!!!!!!!!!!
+			end = g->cd[u] + g->d[2][u];
+			// printf("end is %d\n", end);
+			for (unsigned j = g->cd[u]; j < end; j++) {
+				//listing here!!!  // NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only); !!!!!!!!!!!!!!!!!!
+				(*n)++; 
 			}
 		}
 		return;
 	}
 
-	for (i = 0; i < g->ns[l]; i++){
+	for (unsigned i = 0; i < g->ns[l]; i++){
 		u = g->sub[l][i];
 		printf("%u %u\n",i ,u);
-		g->ns[l - 1]=0;
+		g->ns[l - 1] = 0;
 		end = g->cd[u] + g->d[l][u];
 
-		for (j = g->cd[u]; j < end; j++){ //relabeling nodes and forming U'.
+		for (unsigned j = g->cd[u]; j < end; j++){ // relabeling nodes and forming U
 			v = g->adj[j];
 			//if (g->lab[v]==l){
-				g->lab[v] = l - 1;
-				g->sub[l - 1][g->ns[l - 1]++] = v;
-				g->d[l-1][v] = 0;//new degrees
+			g->lab[v] = l - 1;
+			g->sub[l - 1][g->ns[l - 1]++] = v;
+			g->d[l-1][v] = 0;//new degrees
 			//}
 		}
 
-		for (j = 0; j < g->ns[l-1]; j++){//reodering adjacency list and computing new degrees
+		for (unsigned j = 0; j < g->ns[l-1]; j++){ //reodering adjacency list and computing new degrees
 			v=g->sub[l-1][j];
 			end=g->cd[v]+g->d[l][v];
-			for (k=g->cd[v];k<end;k++){
-				w=g->adj[k];
-				if (g->lab[w]==l-1){
+			for (unsigned k = g->cd[v]; k < end; k++){
+				w = g->adj[k];
+				if (g->lab[w] == l-1){
 					g->d[l-1][v]++;
 				}
 				else{
-					g->adj[k--]=g->adj[--end];
-					g->adj[end]=w;
+					g->adj[k--] = g->adj[--end];
+					g->adj[end] = w;
 				}
 			}
 		}
 
 		kclique(l-1, g, n);
-
-		for (j=0;j<g->ns[l-1];j++){//restoring labels
-			v=g->sub[l-1][j];
-			g->lab[v]=l;
+		
+		//restoring labels
+		for (unsigned j = 0; j < g->ns[l-1]; j++){
+			v = g->sub[l - 1][j];
+			g->lab[v] = l;
 		}
-
 	}
 }
 
@@ -433,7 +436,9 @@ int main(int argc, char** argv) {
 	printf("Building the graph structure\n");
 	fflush(stdout);
 
-	ord_core(g);
+	// compute core number of each vertice in G, 𝑘(𝑣) = the largest k such that the k-core contains v
+	ord_core(g);	
+	// relabled as DAG according to k-core
 	relabel(g);
 
 	mkspecial(g, k);
@@ -449,7 +454,7 @@ int main(int argc, char** argv) {
 	fflush(stdout);
 
 	n = 0;
-	kclique(k, g, &n);
+	kclique(k, g, &n);	 // list all k-cliques 
 
 	printf("Number of %u-cliques: %llu\n", k, n);
 
