@@ -35,20 +35,20 @@ typedef struct {
 typedef struct {
 	unsigned n; // # of nodes
 	unsigned e; // # of edges
-	edge* edges; // array of edges: size of e
+	edge* edges;
 
-    unsigned* attributes; // the attribute dynamic array for nodes: size of n
+    unsigned* attributes; // the attribute dynamic array for nodes -> size of n
     unsigned attr_dimension; // attribute set dimension in graph, mainly will be 2D
 
-	unsigned* ns; // ns[l]: number of nodes in G_l: sie
+	unsigned* ns; // ns[l]: number of nodes in G_l -> size of k+1
 	unsigned** d; // d[l]: degrees of G_l
 	unsigned* cd; // cumulative degree: (starts with 0) length = n+1
 	unsigned* adj; // truncated list of neighbors
-	unsigned* rank; // ranking of the nodes according to degeneracy ordering
+	unsigned* rank; // ranking of the nodes according to degeneracy ordering -> size of n
 	//unsigned *map;// oldID newID correspondance
 
 	unsigned char* lab; // lab[i] label of node i
-	unsigned** sub; //sub[l]: nodes in G_l
+	unsigned** sub; //sub[l]: nodes in G_l	-> size of k+1
 
 	int** resultSet; // results containing the cliques
 } graph;
@@ -130,7 +130,10 @@ graph* read_edgelist(char* edgelist, char* attr_file){
 
 // relabled as DAG 
 void relabel(graph* g){
-	unsigned source, target, tmp;
+	unsigned source;
+	unsigned target;
+	unsigned tmp;
+	
 	for (unsigned i = 0; i < g->e; i++) {
 		source = g->rank[g->edges[i].s];
 		target = g->rank[g->edges[i].t];
@@ -250,40 +253,37 @@ void freeheap(bheap* heap){
 }
 
 // computing degeneracy ordering and core value for each vertice
-void ord_core(graph* g){
-	unsigned i, j, r = 0;
-	unsigned n = g->n;
-	keyvalue kv;
-	bheap* heap;
-
-	unsigned* d0 = calloc(g->n, sizeof(unsigned));	// allocate space and initialize all to 0
-	unsigned* cd0 = malloc((g->n + 1) * sizeof(unsigned));	// ???
+void ord_core(graph* g) {
+	unsigned* d0 = calloc(g->n, sizeof(unsigned));	// record degree for each vertice
+	unsigned* cd0 = malloc((g->n + 1) * sizeof(unsigned));	// cumulative degrees of all vertices
 	unsigned* adj0 = malloc(2 * (g->e) * sizeof(unsigned));	// store the neighbors of each vertices, thus need 2E space
 
-	// fill in the degrees of each vertice in undirected graph
-	for (i = 0; i < g->e; i++) {
+	// update the degree of each vertice in undirected graph
+	for (unsigned i = 0; i < g->e; i++) {
 		d0[g->edges[i].s]++;
 		d0[g->edges[i].t]++;
 	}
 	
+	// add up all the degrees 
 	cd0[0] = 0;
-	for (i = 1; i < g->n + 1; i++) {
+	for (unsigned i = 1; i < g->n + 1; i++) {
 		cd0[i] = cd0[i-1] + d0[i-1];
-		d0[i-1] = 0;
 	}
 
-	for (i = 0;i < g->e; i++) {
-		adj0[ cd0[g->edges[i].s] + d0[ g->edges[i].s ]++ ] = g->edges[i].t;
-		adj0[ cd0[g->edges[i].t] + d0[ g->edges[i].t ]++ ] = g->edges[i].s;
+	for (unsigned i = 0; i < g->e; i++) {
+		unsigned src = g->edges[i].s;
+		unsigned dst = g->edges[i].t;
+		adj0[ cd0[src] ] = src;
+		adj0[ cd0[dst] ] = dst;
 	}
 
-	heap = mk_heap(n, d0);
-
+	unsigned r = 0;
+	bheap* heap = mk_heap(g->n, d0);	// construct a min heap ordered by the degree
 	g->rank = malloc(g->n * sizeof(unsigned));
-	for (i = 0; i < g->n; i++){
-		kv = pop_min(heap);
-		g->rank[kv.key] = n - (++r);
-		for (j = cd0[kv.key]; j < cd0[kv.key + 1]; j++){
+	for (unsigned i = 0; i < g->n; i++){
+		keyvalue kv = pop_min(heap);
+		(g->rank)[kv.key] = g->n - (++r);	// update new ranking for each vertice
+		for (unsigned j = cd0[kv.key]; j < cd0[kv.key + 1]; j++){
 			update(heap, adj0[j]);
 		}
 	}
