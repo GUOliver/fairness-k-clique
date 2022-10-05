@@ -13,12 +13,15 @@ To execute:
 "attribute.txt" should contain the attribute along with the vertice
 Will print the number of k-cliques.
 */
+#include <iostream>
+#include <ostream>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <vector>
+#include <set>
 
 // maximum number of edges for memory allocation, will increase if needed
 #define NLINKS 100000000
@@ -50,7 +53,7 @@ typedef struct {
 	//unsigned *map;// oldID newID correspondance
 
 	unsigned char* lab; // lab[i] label of node i
-	
+	std::vector<std::set<unsigned>> res;
 } graph;
 
 void free_graph(graph* g, unsigned char k){
@@ -343,9 +346,14 @@ void mkspecial(graph* g, unsigned char k) {
 
 
 // n stored the number of k-cliques
-void kclique(unsigned l, graph* g, unsigned long long* n) {
+void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R) {
 	unsigned end, u, v, w;
 	if (l == 2){
+		std::cout << "Now l = 2, before adding any, current R size is " << R.size() << "\n";
+		for (auto& i : R) {
+			std::cout << i << " ";
+		}
+		std::cout << "\n";
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			u = g->sub[2][i];
 			printf("u is %d\n", u);
@@ -355,6 +363,14 @@ void kclique(unsigned l, graph* g, unsigned long long* n) {
 			end = g->cd[u] + g->d[2][u];
 			// printf("end is %d\n", end);
 			for (unsigned j = g->cd[u]; j < end; j++) {
+				printf("u is %d, j is %d\n", u, j);
+				std::set<unsigned> temp = {u, g->adj[j]};
+				std::set<unsigned> dest1;
+				std::set_union(R.begin(), R.end(),
+                       temp.begin(), temp.end(),                  
+                       std::inserter(dest1, dest1.begin()));
+
+				g->res.push_back(dest1);
 				//listing here!!!  // NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only); !!!!!!!!!!!!!!!!!!
 				(*n)++; 
 			}
@@ -362,11 +378,13 @@ void kclique(unsigned l, graph* g, unsigned long long* n) {
 		return;
 	}
 
+	// loop over the vertices of G_l
 	for (unsigned i = 0; i < g->ns[l]; i++){
-		u = g->sub[l][i]; // loop over the vertices of Gl
-		printf("%u %u\n",i ,u);
+		u = g->sub[l][i]; // get the current vertice
+		R.insert(u);
+		// printf("%u %u\n",i ,u);
 		g->ns[l - 1] = 0;
-		end = g->cd[u] + g->d[l][u];
+		end = g->cd[u] + g->d[l][u];	// whole cumulative degree count from vertice 0 to u
 
 		for (unsigned j = g->cd[u]; j < end; j++){ // relabeling nodes and forming U
 			v = g->adj[j];
@@ -378,21 +396,21 @@ void kclique(unsigned l, graph* g, unsigned long long* n) {
 		}
 
 		for (unsigned j = 0; j < g->ns[l-1]; j++){ // reodering adjacency list and computing new degrees
-			v=g->sub[l-1][j];
-			end=g->cd[v]+g->d[l][v];
+			v = g->sub[l-1][j];
+			end = g->cd[v] + g->d[l][v];
+			
 			for (unsigned k = g->cd[v]; k < end; k++){
-				w = g->adj[k];
+				w = g->adj[k];	
 				if (g->lab[w] == l-1){
 					g->d[l-1][v]++;
-				}
-				else{
+				} else{
 					g->adj[k--] = g->adj[--end];
 					g->adj[end] = w;
 				}
 			}
 		}
 
-		kclique(l - 1, g, n);
+		kclique(l - 1, g, n, R);
 		
 		//restoring labels
 		for (unsigned j = 0; j < g->ns[l - 1]; j++){
@@ -451,7 +469,17 @@ int main(int argc, char** argv) {
 	fflush(stdout);
 
 	n = 0;
-	kclique(k, g, &n);	 // list all k-cliques 
+	std::set<unsigned> R;
+	kclique(k, g, &n, R);	 // list all k-cliques
+	std::cout << "result size is " << g->res.size() << std::endl;
+
+	for (auto& i : g->res) {
+		for (auto & j : i) {
+			std::cout << j <<" ";
+		}
+		std::cout << "\n";
+	}
+	std::cout << "\n";
 
 	printf("Number of %u-cliques: %llu\n", k, n);
 
