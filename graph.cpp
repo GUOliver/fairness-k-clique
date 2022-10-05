@@ -18,6 +18,7 @@ Will print the number of k-cliques.
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+#include <vector>
 
 // maximum number of edges for memory allocation, will increase if needed
 #define NLINKS 100000000
@@ -74,7 +75,7 @@ unsigned max3(unsigned int a,unsigned int b,unsigned int c) {
 
 // read attributes of vertices from file
 void read_attribute_file(graph* g, char* attr_file) {
-    g->attributes = malloc(g->n * sizeof(int));
+    g->attributes = (unsigned int *)malloc(g->n * sizeof(int));
     FILE* f = fopen(attr_file, "r");
     if (f == NULL) {
         printf("Cannot open the attribute file ! \n");
@@ -103,25 +104,25 @@ void read_attribute_file(graph* g, char* attr_file) {
 // read edgeList from file
 graph* read_edgelist(char* edgelist, char* attr_file){
 	unsigned e1 = NLINKS;	// maximum number of edges, will increase if needed
-	graph* g = malloc(sizeof(graph));
+	graph* g = (graph*)malloc(sizeof(graph));
 	FILE *file;
 
 	g->n = 0;
 	g->e = 0;
 	file = fopen(edgelist,"r");
-	g->edges = malloc(e1 * sizeof(edge));
+	g->edges = (edge*)malloc(e1 * sizeof(edge));
 
 	while (fscanf(file,"%u %u", &(g->edges[g->e].s), &(g->edges[g->e].t)) == 2) { //Add each edge
 		g->n = max3(g->n, g->edges[g->e].s, g->edges[g->e].t);
 		g->e++;
 		if (g->e == e1) {
 			e1 += NLINKS;
-			g->edges=realloc(g->edges, e1 * sizeof(edge));
+			g->edges = (edge*)realloc(g->edges, e1 * sizeof(edge));
 		}
 	}
 	fclose(file);
 	g->n++;	// node index starts from 0, thus +1 needed
-	g->edges = realloc(g->edges, g->e * sizeof(edge));	// realloc the space to accommodate g->e(updated) # of edges !
+	g->edges = (edge*)realloc(g->edges, g->e * sizeof(edge));	// realloc the space to accommodate g->e(updated) # of edges !
     
 	read_attribute_file(g, attr_file); // fill in attributes array in graph
 	return g;
@@ -162,14 +163,14 @@ typedef struct {
 
 
 bheap* construct(unsigned n_max){
-	bheap* heap=malloc(sizeof(bheap));
+	bheap* heap = (bheap*)malloc(sizeof(bheap));
 	heap->n_max = n_max;
 	heap->n = 0;
-	heap->pt = malloc(n_max * sizeof(unsigned));
+	heap->pt = (unsigned int*)malloc(n_max * sizeof(unsigned));
 	for (unsigned i = 0; i < n_max; i++) {
 		(heap->pt)[i] = -1;
 	}
-	heap->kv = malloc(n_max * sizeof(keyvalue));
+	heap->kv = (keyvalue*)malloc(n_max * sizeof(keyvalue));
 	return heap;
 }
 
@@ -253,9 +254,9 @@ void freeheap(bheap* heap){
 
 // computing degeneracy ordering and core value for each vertice
 void ord_core(graph* g) {
-	unsigned* d0 = calloc(g->n, sizeof(unsigned));	// record degree for each vertice
-	unsigned* cd0 = malloc((g->n + 1) * sizeof(unsigned));	// cumulative degrees of all vertices
-	unsigned* adj0 = malloc(2 * (g->e) * sizeof(unsigned));	// ??
+	unsigned* d0 = (unsigned int*)calloc(g->n, sizeof(unsigned));	// record degree for each vertice
+	unsigned* cd0 = (unsigned int*)malloc((g->n + 1) * sizeof(unsigned));	// cumulative degrees of all vertices
+	unsigned* adj0 = (unsigned int*)malloc(2 * (g->e) * sizeof(unsigned));	// ??
 
 	// update the degree of each vertice in undirected graph
 	for (unsigned i = 0; i < g->e; i++) {
@@ -278,7 +279,7 @@ void ord_core(graph* g) {
 
 	unsigned r = 0;
 	bheap* heap = mk_heap(g->n, d0);	// construct a min heap ordered by the degree
-	g->rank = malloc(g->n * sizeof(unsigned));
+	g->rank = (unsigned int*)malloc(g->n * sizeof(unsigned));
 	for (unsigned i = 0; i < g->n; i++){
 		keyvalue kv = pop_min(heap);
 		(g->rank)[kv.key] = g->n - (++r);	// update new ranking for each vertice
@@ -297,18 +298,18 @@ void ord_core(graph* g) {
 //////////////////////////
 // Building the special graph structure
 void mkspecial(graph* g, unsigned char k) {
-	unsigned* d = calloc(g->n, sizeof(unsigned));
+	unsigned* d = (unsigned int*)calloc(g->n, sizeof(unsigned));
 
 	for (unsigned i = 0; i < g->e; i++) {
 		d[g->edges[i].s]++;
 	}
 
-	g->cd = malloc((g->n + 1) * sizeof(unsigned));
+	g->cd = (unsigned int*)malloc((g->n + 1) * sizeof(unsigned));
 	unsigned ns = 0;
 	g->cd[0] = 0;
 	unsigned max = 0;
-	unsigned* sub = malloc(g->n * sizeof(unsigned));
-	unsigned char* lab = malloc(g->n * sizeof(unsigned char));
+	unsigned* sub = (unsigned int*)malloc(g->n * sizeof(unsigned));
+	unsigned char* lab = (unsigned char*)malloc(g->n * sizeof(unsigned char));
 	for (unsigned i = 1; i < g->n + 1; i++) {
 		g->cd[i] = g->cd[i - 1] + d[i - 1];
 		max = (max > d[i - 1]) ? max : d[i - 1];
@@ -319,21 +320,21 @@ void mkspecial(graph* g, unsigned char k) {
 	printf("max degree = %u\n",max);
 	fflush(stdout);
 
-	g->adj=malloc(g->e*sizeof(unsigned));
+	g->adj = (unsigned int*)malloc(g->e*sizeof(unsigned));
 
 	for (unsigned i = 0; i < g->e; i++) {
 		g->adj[ g->cd[g->edges[i].s] + d[ g->edges[i].s ]++ ]=g->edges[i].t;
 	}
 	free(g->edges);
 
-	g->ns=malloc((k+1)*sizeof(unsigned));
-	g->ns[k]=ns;
+	g->ns = (unsigned int*)malloc((k + 1) * sizeof(unsigned));
+	g->ns[k] = ns;
 
-	g->d=malloc((k+1)*sizeof(unsigned*));
-	g->sub=malloc((k+1)*sizeof(unsigned*));
+	g->d = (unsigned int**)malloc((k + 1) * sizeof(unsigned*));
+	g->sub = (unsigned int**)malloc((k + 1) * sizeof(unsigned*));
 	for (unsigned i = 2; i < k; i++){
-		g->d[i] = malloc(g->n*sizeof(unsigned));
-		g->sub[i] = malloc(max*sizeof(unsigned));
+		g->d[i] = (unsigned int*)malloc(g->n * sizeof(unsigned));
+		g->sub[i] = (unsigned int*)malloc(max * sizeof(unsigned));
 	}
 	g->d[k] = d;
 	g->sub[k] = sub;
