@@ -41,6 +41,7 @@ typedef struct {
     unsigned attr_dimension; // attribute set dimension in graph, mainly will be 2D
 
 	unsigned* ns; // ns[l]: number of nodes in G_l -> size of k+1
+	unsigned** sub; //sub[l]: nodes in G_l	-> size of k+1
 	unsigned** d; // d[l]: degrees of G_l
 	unsigned* cd; // cumulative degree: (starts with 0) length = n+1
 	unsigned* adj; // truncated list of neighbors
@@ -48,9 +49,7 @@ typedef struct {
 	//unsigned *map;// oldID newID correspondance
 
 	unsigned char* lab; // lab[i] label of node i
-	unsigned** sub; //sub[l]: nodes in G_l	-> size of k+1
-
-	int** resultSet; // results containing the cliques
+	
 } graph;
 
 void free_graph(graph* g, unsigned char k){
@@ -218,8 +217,8 @@ void insert(bheap* heap, keyvalue kv){
 }
 
 void update(bheap* heap, unsigned key){
-	unsigned i = heap->pt[key];
-	if (i != -1){
+	unsigned i = (heap->pt)[key];
+	if (i != -1) {
 		((heap->kv[i]).value)--;
 		bubble_up(heap, i);
 	}
@@ -256,7 +255,7 @@ void freeheap(bheap* heap){
 void ord_core(graph* g) {
 	unsigned* d0 = calloc(g->n, sizeof(unsigned));	// record degree for each vertice
 	unsigned* cd0 = malloc((g->n + 1) * sizeof(unsigned));	// cumulative degrees of all vertices
-	unsigned* adj0 = malloc(2 * (g->e) * sizeof(unsigned));	// store the neighbors of each vertices, thus need 2E space
+	unsigned* adj0 = malloc(2 * (g->e) * sizeof(unsigned));	// ??
 
 	// update the degree of each vertice in undirected graph
 	for (unsigned i = 0; i < g->e; i++) {
@@ -284,6 +283,7 @@ void ord_core(graph* g) {
 		keyvalue kv = pop_min(heap);
 		(g->rank)[kv.key] = g->n - (++r);	// update new ranking for each vertice
 		for (unsigned j = cd0[kv.key]; j < cd0[kv.key + 1]; j++){
+			printf("aj[%d] = %d\n", j, adj0[j]);
 			update(heap, adj0[j]);
 		}
 	}
@@ -297,7 +297,6 @@ void ord_core(graph* g) {
 //////////////////////////
 // Building the special graph structure
 void mkspecial(graph* g, unsigned char k) {
-	
 	unsigned* d = calloc(g->n, sizeof(unsigned));
 
 	for (unsigned i = 0; i < g->e; i++) {
@@ -338,7 +337,6 @@ void mkspecial(graph* g, unsigned char k) {
 	}
 	g->d[k] = d;
 	g->sub[k] = sub;
-
 	g->lab = lab;
 }
 
@@ -346,8 +344,6 @@ void mkspecial(graph* g, unsigned char k) {
 // n stored the number of k-cliques
 void kclique(unsigned l, graph* g, unsigned long long* n) {
 	unsigned end, u, v, w;
-
-
 	if (l == 2){
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			u = g->sub[2][i];
@@ -366,7 +362,7 @@ void kclique(unsigned l, graph* g, unsigned long long* n) {
 	}
 
 	for (unsigned i = 0; i < g->ns[l]; i++){
-		u = g->sub[l][i];
+		u = g->sub[l][i]; // loop over the vertices of Gl
 		printf("%u %u\n",i ,u);
 		g->ns[l - 1] = 0;
 		end = g->cd[u] + g->d[l][u];
@@ -376,11 +372,11 @@ void kclique(unsigned l, graph* g, unsigned long long* n) {
 			//if (g->lab[v]==l){
 			g->lab[v] = l - 1;
 			g->sub[l - 1][g->ns[l - 1]++] = v;
-			g->d[l-1][v] = 0;//new degrees
+			g->d[l-1][v] = 0; //new degrees
 			//}
 		}
 
-		for (unsigned j = 0; j < g->ns[l-1]; j++){ //reodering adjacency list and computing new degrees
+		for (unsigned j = 0; j < g->ns[l-1]; j++){ // reodering adjacency list and computing new degrees
 			v=g->sub[l-1][j];
 			end=g->cd[v]+g->d[l][v];
 			for (unsigned k = g->cd[v]; k < end; k++){
@@ -395,10 +391,10 @@ void kclique(unsigned l, graph* g, unsigned long long* n) {
 			}
 		}
 
-		kclique(l-1, g, n);
+		kclique(l - 1, g, n);
 		
 		//restoring labels
-		for (unsigned j = 0; j < g->ns[l-1]; j++){
+		for (unsigned j = 0; j < g->ns[l - 1]; j++){
 			v = g->sub[l - 1][j];
 			g->lab[v] = l;
 		}
