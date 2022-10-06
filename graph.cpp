@@ -52,8 +52,8 @@ typedef struct {
 	unsigned* rank; // ranking of the nodes according to degeneracy ordering -> size of n
 	//unsigned *map;// oldID newID correspondance
 
-	unsigned char* lab; // lab[i] label of node i
-	std::vector<std::set<unsigned>> res;
+	unsigned char* lab; // lab[i]: label of node i
+	std::vector<std::set<unsigned>> res;	// store the all the clique results
 } graph;
 
 void free_graph(graph* g, unsigned char k){
@@ -156,7 +156,7 @@ typedef struct {
 	unsigned value;
 } keyvalue;
 
-// Building the heap structure with (key, value) = (node, degree) for each node
+// Building the heap structure with (key, value) = (node_index, degree) for each node
 typedef struct {
 	unsigned n_max;	// max number of nodes
 	unsigned n;	// number of nodes
@@ -275,17 +275,17 @@ void ord_core(graph* g) {
 
 	for (unsigned i = 0; i < g->e; i++) {
 		unsigned src = g->edges[i].s;
-		unsigned dst = g->edges[i].t;
 		adj0[ cd0[src] ] = src;
+		unsigned dst = g->edges[i].t;
 		adj0[ cd0[dst] ] = dst;
 	}
 
 	unsigned r = 0;
 	bheap* heap = mk_heap(g->n, d0);	// construct a min heap ordered by the degree
-	g->rank = (unsigned int*)malloc(g->n * sizeof(unsigned));
+	g->rank = (unsigned int*)malloc(g->n * sizeof(unsigned));	// initialise rank array
 	for (unsigned i = 0; i < g->n; i++){
 		keyvalue kv = pop_min(heap);
-		(g->rank)[kv.key] = g->n - (++r);	// update new ranking for each vertice
+		(g->rank)[kv.key] = g->n - (++r);	// update new ranking for each vertice in descending
 		for (unsigned j = cd0[kv.key]; j < cd0[kv.key + 1]; j++){
 			printf("aj[%d] = %d\n", j, adj0[j]);
 			update(heap, adj0[j]);
@@ -349,21 +349,21 @@ void mkspecial(graph* g, unsigned char k) {
 void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R) {
 	unsigned end, u, v, w;
 	if (l == 2){
-		std::cout << "Now l = 2, before adding any, current R size is " << R.size() << "\n";
-		for (auto& i : R) {
-			std::cout << i << " ";
-		}
-		std::cout << "\n";
+		// std::cout << "Now l = 2, before adding any, current R size is " << R.size() << "\n";
+		// for (auto& i : R) {
+		// 	std::cout << i << " ";
+		// }
+		// std::cout << "\n";
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			u = g->sub[2][i];
-			printf("u is %d\n", u);
+			// printf("u is %d\n", u);
 			// printf("cd[u] is %d\n", g->cd[u]);
 			// printf("d[2][u] is %d\n", g->d[2][u]);
 			//(*n)+=g->d[2][u];
 			end = g->cd[u] + g->d[2][u];
-			// printf("end is %d\n", end);
+			printf("end is %d\n", end);
 			for (unsigned j = g->cd[u]; j < end; j++) {
-				printf("u is %d, j is %d\n", u, j);
+				printf("u is %d, j is %d, g->adj[j] is %d\n", u, j, g->adj[j]);
 				std::set<unsigned> temp = {u, g->adj[j]};
 				std::set<unsigned> dest1;
 				std::set_union(R.begin(), R.end(),
