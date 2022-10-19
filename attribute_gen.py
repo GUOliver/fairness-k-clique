@@ -1,6 +1,14 @@
 import random
 import sys
- 
+'''
+
+this file used to generator attributes for unlimited node
+
+notice:
+the commond line is:
+python3 attribute_gen.py number_of_node number_of_attributes
+
+'''
 
 if(len(sys.argv[1])==0):
     print("plz input number of node\n")
