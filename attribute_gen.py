@@ -10,13 +10,13 @@ python3 attribute_gen.py number_of_node number_of_attributes
 
 '''
 
-if(len(sys.argv[1])==0):
+if (len(sys.argv)<2):
     print("plz input number of node\n")
-    exit
+    exit(0)
 
-if(len(sys.argv[2])==0):
+if (len(sys.argv)<3):
     print("plz input number of attributes\n")
-    exit
+    exit(0)
 N_node = int(sys.argv[1])
 N_attribute = int(sys.argv[2])
 
