@@ -33,8 +33,6 @@ class DAG_:
             if u>v : u,v = v,u
             self.adj[u].add_neigh(v)
 
-
-
 def induced_DAG(DAG,u,l):
     """
     Modify DAG to get the induced graph by the neighbourhood of u
@@ -52,7 +50,6 @@ def induced_DAG(DAG,u,l):
                 DAG.adj[v].update_neigh(w)
                 new_deg += 1
         DAG.adj[v].update_deg(new_deg)
-        
 
 def listing(l,DAG,C,res, verbose = False):
     if verbose:        

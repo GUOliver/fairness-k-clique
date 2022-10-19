@@ -13,6 +13,7 @@ To execute:
 "attribute.txt" should contain the attribute along with the vertice
 Will print the number of k-cliques.
 */
+#include <cstdio>
 #include <iostream>
 #include <ostream>
 #include <stdlib.h>
@@ -41,8 +42,8 @@ typedef struct {
 	unsigned e; // # of edges
 	edge* edges;
 
-    unsigned* attributes; // the attribute dynamic array for nodes -> size of n
-    unsigned attr_dimension; // attribute set dimension in graph, mainly will be 2D
+    unsigned* attributes; // the attribute array for nodes -> size of n
+    unsigned attr_dimension; // attribute set dimension in graph, mainly 2D
 
 	unsigned* ns; // ns[l]: number of nodes in G_l -> size of k+1
 	unsigned** sub; //sub[l]: nodes in G_l	-> size of k+1
@@ -108,7 +109,7 @@ void read_attribute_file(graph* g, char* attr_file) {
 graph* read_edgelist(char* edgelist, char* attr_file){
 	unsigned e1 = NLINKS;	// maximum number of edges, will increase if needed
 	graph* g = (graph*)malloc(sizeof(graph));
-	FILE *file;
+	FILE* file;
 
 	g->n = 0;
 	g->e = 0;
@@ -131,65 +132,65 @@ graph* read_edgelist(char* edgelist, char* attr_file){
 	return g;
 }
 
-// relabled as DAG 
 void relabel(graph* g){
-	unsigned source;
-	unsigned target;
+	unsigned src_rank;
+	unsigned target_rank;
 	unsigned tmp;
 	
 	for (unsigned i = 0; i < g->e; i++) {
-		source = g->rank[g->edges[i].s];
-		target = g->rank[g->edges[i].t];
-		if (source < target){
-			tmp = source;
-			source = target;
-			target = tmp;
+		src_rank = g->rank[g->edges[i].s];
+		target_rank = g->rank[g->edges[i].t];
+		if (src_rank < target_rank){	// make sure src_rank always greater than target rank
+			tmp = src_rank;
+			src_rank = target_rank;
+			target_rank = tmp;
 		}
-		g->edges[i].s = source;
-		g->edges[i].t = target;
+		// relabel vertice by their rank
+		g->edges[i].s = src_rank;
+		g->edges[i].t = target_rank;
 	}
 }
 
 ///// CORE ordering /////////////////////
 typedef struct {
-	unsigned key;
-	unsigned value;
-} keyvalue;
+	unsigned id;
+	unsigned degree;
+} vertice;
 
-// Building the heap structure with (key, value) = (node_index, degree) for each node
+// Building the heap structure with (id, degree) = (node_index, degree) for each node
 typedef struct {
 	unsigned n_max;	// max number of nodes
 	unsigned n;	// number of nodes
 	unsigned* pt;	// pointers to nodes
-	keyvalue* kv; // nodes
+	vertice* v; // nodes
 } bheap;
 
 
 bheap* construct(unsigned n_max){
-	bheap* heap = (bheap*)malloc(sizeof(bheap));
+	bheap* heap = (bheap*)malloc(sizeof(bheap));	// size of 24B, 4+4+8+8
 	heap->n_max = n_max;
 	heap->n = 0;
 	heap->pt = (unsigned int*)malloc(n_max * sizeof(unsigned));
 	for (unsigned i = 0; i < n_max; i++) {
 		(heap->pt)[i] = -1;
 	}
-	heap->kv = (keyvalue*)malloc(n_max * sizeof(keyvalue));
+	heap->v = (vertice*)malloc(n_max * sizeof(vertice));
 	return heap;
 }
 
 void swap(bheap* heap, unsigned i, unsigned j) {
-	keyvalue kv_tmp = heap->kv[i];
-	unsigned pt_tmp = heap->pt[kv_tmp.key];
-	heap->pt[heap->kv[i].key] = heap->pt[heap->kv[j].key];
-	heap->kv[i] = heap->kv[j];
-	heap->pt[heap->kv[j].key] = pt_tmp;
-	heap->kv[j] = kv_tmp;
+	vertice v_tmp = heap->v[i];
+	unsigned pt_tmp = heap->pt[v_tmp.id];
+	heap->pt[heap->v[i].id] = heap->pt[heap->v[j].id];
+	heap->v[i] = heap->v[j];
+	heap->pt[heap->v[j].id] = pt_tmp;
+	heap->v[j] = v_tmp;
 }
 
 void bubble_up(bheap* heap, unsigned i) {
 	unsigned j = (i - 1) / 2;
 	while (i > 0) {
-		if (heap->kv[j].value > heap->kv[i].value) {
+		if (heap->v[j].degree > heap->v[i].degree) {
 			swap(heap, i, j);
 			i = j;
 			j = (i - 1) / 2;
@@ -202,8 +203,8 @@ void bubble_down(bheap* heap) {
 	unsigned i = 0, j1 = 1, j2 = 2;
 	unsigned j;
 	while (j1 < heap->n) {
-		j=( (j2 < heap->n) && (heap->kv[j2].value < heap->kv[j1].value) ) ? j2 : j1 ;
-		if (heap->kv[j].value < heap->kv[i].value) {
+		j=( (j2 < heap->n) && (heap->v[j2].degree < heap->v[j1].degree) ) ? j2 : j1 ;
+		if (heap->v[j].degree < heap->v[i].degree) {
 			swap(heap, i, j);
 			i = j;
 			j1 = 2 * i + 1;
@@ -214,48 +215,49 @@ void bubble_down(bheap* heap) {
 	}
 }
 
-void insert(bheap* heap, keyvalue kv){
-	(heap->pt)[kv.key] = (heap->n)++;
-	heap->kv[heap->n - 1] = kv;
-	bubble_up(heap,heap->n - 1);
+void insert(bheap* heap, vertice v){
+	(heap->n)++;
+	(heap->pt)[v.id] = heap->n;
+	heap->v[heap->n - 1] = v;
+	bubble_up(heap, heap->n - 1);
 }
 
-void update(bheap* heap, unsigned key){
-	unsigned i = (heap->pt)[key];
+void update(bheap* heap, unsigned id){
+	unsigned i = (heap->pt)[id];
 	if (i != -1) {
-		((heap->kv[i]).value)--;
+		((heap->v[i]).degree)--;
 		bubble_up(heap, i);
 	}
 }
 
-keyvalue pop_min(bheap* heap){
-	keyvalue min = heap->kv[0];
-	heap->pt[min.key] = -1;
-	heap->kv[0] = heap->kv[--(heap->n)];
-	heap->pt[heap->kv[0].key] = 0;
+vertice pop_min(bheap* heap){
+	vertice min = heap->v[0];
+	heap->pt[min.id] = -1;
+	heap->v[0] = heap->v[--(heap->n)];
+	heap->pt[heap->v[0].id] = 0;
 	bubble_down(heap);
 	return min;
 }
 
-// Building the heap structure with (key, value) = (node, degree) for each node
+// Building the heap for each node
 bheap* mk_heap(unsigned n, unsigned* degrees){
-	keyvalue kv;
+	vertice v;
 	bheap* heap = construct(n);
 	for (unsigned i = 0; i < n; i++){
-		kv.key = i;
-		kv.value = degrees[i];
-		insert(heap, kv);
+		v.id = i;
+		v.degree = degrees[i];
+		insert(heap, v);
 	}
 	return heap;
 }
 
 void freeheap(bheap* heap){
 	free(heap->pt);
-	free(heap->kv);
+	free(heap->v);
 	free(heap);
 }
 
-// computing degeneracy ordering and core value for each vertice
+// computing degeneracy ordering and core degree for each vertice
 void ord_core(graph* g) {
 	unsigned* d0 = (unsigned int*)calloc(g->n, sizeof(unsigned));	// record degree for each vertice
 	unsigned* cd0 = (unsigned int*)malloc((g->n + 1) * sizeof(unsigned));	// cumulative degrees of all vertices
@@ -280,18 +282,29 @@ void ord_core(graph* g) {
 		adj0[ cd0[dst] ] = dst;
 	}
 
-	unsigned r = 0;
 	bheap* heap = mk_heap(g->n, d0);	// construct a min heap ordered by the degree
 	g->rank = (unsigned int*)malloc(g->n * sizeof(unsigned));	// initialise rank array
-	for (unsigned i = 0; i < g->n; i++){
-		keyvalue kv = pop_min(heap);
-		(g->rank)[kv.key] = g->n - (++r);	// update new ranking for each vertice in descending
-		for (unsigned j = cd0[kv.key]; j < cd0[kv.key + 1]; j++){
-			printf("aj[%d] = %d\n", j, adj0[j]);
+	for (unsigned i = 0, r = 0; i < g->n; i++){
+		vertice v = pop_min(heap); // pop out the vertice with min degree
+		(g->rank)[v.id] = g->n - (++r);	// update new ranking for each vertice in descending order
+		for (unsigned j = cd0[v.id]; j < cd0[v.id + 1]; j++){
 			update(heap, adj0[j]);
 		}
 	}
-	
+
+	// printf("=======================");
+	// printf("\n");
+	// printf("check d0 array: ");
+	// for (int i = 0; i < g->n; i++) {
+	// 	printf("%d ", d0[i]);
+	// }
+	// printf("\n");
+
+	// printf("check cd0 array: ");
+	// for (int i = 1; i < g->n+1; i++) {
+	// 	printf("%d ", cd0[i]);
+	// }
+	// printf("\n");
 	freeheap(heap);
 	free(d0);
 	free(cd0);
@@ -335,10 +348,12 @@ void mkspecial(graph* g, unsigned char k) {
 
 	g->d = (unsigned int**)malloc((k + 1) * sizeof(unsigned*));
 	g->sub = (unsigned int**)malloc((k + 1) * sizeof(unsigned*));
+
 	for (unsigned i = 2; i < k; i++){
 		g->d[i] = (unsigned int*)malloc(g->n * sizeof(unsigned));
 		g->sub[i] = (unsigned int*)malloc(max * sizeof(unsigned));
 	}
+
 	g->d[k] = d;
 	g->sub[k] = sub;
 	g->lab = lab;
@@ -349,29 +364,18 @@ void mkspecial(graph* g, unsigned char k) {
 void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R) {
 	unsigned end, u, v, w;
 	if (l == 2){
-		// std::cout << "Now l = 2, before adding any, current R size is " << R.size() << "\n";
-		// for (auto& i : R) {
-		// 	std::cout << i << " ";
-		// }
-		// std::cout << "\n";
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			u = g->sub[2][i];
-			// printf("u is %d\n", u);
-			// printf("cd[u] is %d\n", g->cd[u]);
-			// printf("d[2][u] is %d\n", g->d[2][u]);
-			//(*n)+=g->d[2][u];
 			end = g->cd[u] + g->d[2][u];
-			printf("end is %d\n", end);
+			printf("u is %d, end is %d\n", u, end);
 			for (unsigned j = g->cd[u]; j < end; j++) {
 				printf("u is %d, j is %d, g->adj[j] is %d\n", u, j, g->adj[j]);
 				std::set<unsigned> temp = {u, g->adj[j]};
-				std::set<unsigned> dest1;
-				std::set_union(R.begin(), R.end(),
-                       temp.begin(), temp.end(),                  
-                       std::inserter(dest1, dest1.begin()));
-
-				g->res.push_back(dest1);
-				//listing here!!!  // NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only); !!!!!!!!!!!!!!!!!!
+				std::set<unsigned> target_clique;
+				std::set_union(R.begin(), R.end(), temp.begin(), temp.end(),
+					std::inserter(target_clique, target_clique.begin()));
+				g->res.push_back(target_clique);
+				// NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only) !!
 				(*n)++; 
 			}
 		}
@@ -381,15 +385,21 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 	// loop over the vertices of G_l
 	for (unsigned i = 0; i < g->ns[l]; i++){
 		u = g->sub[l][i]; // get the current vertice
-		R.insert(u);
-		// printf("%u %u\n",i ,u);
-		g->ns[l - 1] = 0;
-		end = g->cd[u] + g->d[l][u];	// whole cumulative degree count from vertice 0 to u
 
+		std::set<unsigned> tmp = {u};
+		std::set<unsigned> current_clique;
+		std::set_union(R.begin(), R.end(),
+				tmp.begin(), tmp.end(),                  
+				std::inserter(current_clique, current_clique.begin()));
+		printf("current vertice is %u\n", u);
+
+		g->ns[l - 1] = 0;
+		
+		end = g->cd[u] + g->d[l][u];	// whole cumulative degree count from vertice 0 to u
 		for (unsigned j = g->cd[u]; j < end; j++){ // relabeling nodes and forming U
 			v = g->adj[j];
 			//if (g->lab[v]==l){
-			g->lab[v] = l - 1;
+			g->lab[v] = l - 1;	// mark v (neighbor of u) to l-1
 			g->sub[l - 1][g->ns[l - 1]++] = v;
 			g->d[l-1][v] = 0; //new degrees
 			//}
@@ -398,9 +408,8 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 		for (unsigned j = 0; j < g->ns[l-1]; j++){ // reodering adjacency list and computing new degrees
 			v = g->sub[l-1][j];
 			end = g->cd[v] + g->d[l][v];
-			
 			for (unsigned k = g->cd[v]; k < end; k++){
-				w = g->adj[k];	
+				w = g->adj[k];
 				if (g->lab[w] == l-1){
 					g->d[l-1][v]++;
 				} else{
@@ -410,16 +419,15 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 			}
 		}
 
-		kclique(l - 1, g, n, R);
+		kclique(l - 1, g, n, current_clique);
 		
 		//restoring labels
-		for (unsigned j = 0; j < g->ns[l - 1]; j++){
+		for (unsigned j = 0; j < g->ns[l-1]; j++){
 			v = g->sub[l - 1][j];
 			g->lab[v] = l;
 		}
 	}
 }
-
 
 int main(int argc, char** argv) {
 	if (argc < 4) {
@@ -451,8 +459,9 @@ int main(int argc, char** argv) {
 	printf("Building the graph structure\n");
 	fflush(stdout);
 
-	// compute core number of each vertice in G, 𝑘(𝑣) = the largest k such that the k-core contains v
-	ord_core(g);	
+	//compute core number of each vertice in G, 𝑘(𝑣) = the largest k such that the k-core contains v
+	ord_core(g);
+	
 	// relabled as DAG according to k-core
 	relabel(g);
 
@@ -474,7 +483,7 @@ int main(int argc, char** argv) {
 	std::cout << "result size is " << g->res.size() << std::endl;
 
 	for (auto& i : g->res) {
-		for (auto & j : i) {
+		for (auto& j : i) {
 			std::cout << j <<" ";
 		}
 		std::cout << "\n";
