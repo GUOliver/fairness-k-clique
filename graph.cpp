@@ -463,7 +463,7 @@ int main(int argc, char** argv) {
 	ord_core(g);
 	
 	// relabled as DAG according to k-core
-	relabel(g);
+	// relabel(g);
 
 	mkspecial(g, k);
 
