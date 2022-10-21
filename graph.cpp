@@ -8,10 +8,10 @@ To compile:
 "gcc graph.c -O9 -o graph".
 
 To execute:
-"./graph k edgelist.txt attribute.txt".
-"edgelist.txt" should contain the graph: one edge on each line separated by a space.
-"attribute.txt" should contain the attribute along with the vertice
-Will print the number of k-cliques.
+	- Generate attribute_gen.txt by run attribute_gen.py
+	- ./graph k edgelist.txt attribute.txt
+	"edgelist.txt" should contain the graph: one edge on each line separated by a space.
+	"attribute.txt" should contain the attribute along with the vertice
 */
 #include <cstdio>
 #include <iostream>
@@ -32,17 +32,12 @@ typedef struct {
 	unsigned t;
 } edge;
 
-// typedef struct {
-// 	unsigned node;
-// 	unsigned deg;
-// } nodedeg;
-
 typedef struct {
 	unsigned n; // # of nodes
 	unsigned e; // # of edges
 	edge* edges;
 
-    unsigned* attributes; // the attribute array for nodes -> size of n
+    unsigned* attributes; // the attribute array for nodes -> size of n, attributes[i] = A
     unsigned attr_dimension; // attribute set dimension in graph, mainly 2D
 
 	unsigned* ns; // ns[l]: number of nodes in G_l -> size of k+1
@@ -79,7 +74,7 @@ unsigned max3(unsigned int a,unsigned int b,unsigned int c) {
 
 // read attributes of vertices from file
 void read_attribute_file(graph* g, char* attr_file) {
-    g->attributes = (unsigned int *)malloc(g->n * sizeof(int));
+    g->attributes = (unsigned*)malloc(g->n * sizeof(unsigned));
     FILE* f = fopen(attr_file, "r");
     if (f == NULL) {
         printf("Cannot open the attribute file ! \n");
@@ -91,7 +86,7 @@ void read_attribute_file(graph* g, char* attr_file) {
     g->attr_dimension = 0;
     while (fscanf(f, "%d %d", &curr_node, &curr_attr) == 2) {
         if (curr_node >=  g->n) {
-            printf("Erroneous attribute file with node %d\n", curr_node);
+            printf("Erroneous attribute file with vertice %d\n", curr_node);
             exit(1);
         }
         g->attributes[curr_node] = curr_attr;
@@ -101,7 +96,7 @@ void read_attribute_file(graph* g, char* attr_file) {
     }
     g->attr_dimension++;
     fclose(f);
-    printf("Finished reading attribute file\n");
+    printf("Attribute dimension: %d, Finished reading attribute file\n", g->attr_dimension);
     return;
 }
 
