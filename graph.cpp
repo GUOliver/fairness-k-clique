@@ -84,6 +84,7 @@ void read_attribute_file(graph* g, char* attr_file) {
     int curr_node = 0;
     int curr_attr = 0;
     g->attr_dimension = 0;
+	printf("Totol vertices count: %d\n", g->n);
     while (fscanf(f, "%d %d", &curr_node, &curr_attr) == 2) {
         if (curr_node >=  g->n) {
             printf("Erroneous attribute file with vertice %d\n", curr_node);
@@ -122,7 +123,7 @@ graph* read_edgelist(char* edgelist, char* attr_file){
 	fclose(file);
 	g->n++;	// node index starts from 0, thus +1 needed
 	g->edges = (edge*)realloc(g->edges, g->e * sizeof(edge));	// realloc the space to accommodate g->e(updated) # of edges !
-    
+    printf("In reading edgelist, total vertices count: %d\n", g->n);
 	read_attribute_file(g, attr_file); // fill in attributes array in graph
 	return g;
 }
@@ -287,19 +288,6 @@ void ord_core(graph* g) {
 		}
 	}
 
-	// printf("=======================");
-	// printf("\n");
-	// printf("check d0 array: ");
-	// for (int i = 0; i < g->n; i++) {
-	// 	printf("%d ", d0[i]);
-	// }
-	// printf("\n");
-
-	// printf("check cd0 array: ");
-	// for (int i = 1; i < g->n+1; i++) {
-	// 	printf("%d ", cd0[i]);
-	// }
-	// printf("\n");
 	freeheap(heap);
 	free(d0);
 	free(cd0);
@@ -362,9 +350,9 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			u = g->sub[2][i];
 			end = g->cd[u] + g->d[2][u];
-			printf("u is %d, end is %d\n", u, end);
+			// printf("u is %d, end is %d\n", u, end);
 			for (unsigned j = g->cd[u]; j < end; j++) {
-				printf("u is %d, j is %d, g->adj[j] is %d\n", u, j, g->adj[j]);
+				// printf("u is %d, j is %d, g->adj[j] is %d\n", u, j, g->adj[j]);
 				std::set<unsigned> temp = {u, g->adj[j]};
 				std::set<unsigned> target_clique;
 				std::set_union(R.begin(), R.end(), temp.begin(), temp.end(),
@@ -386,7 +374,7 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 		std::set_union(R.begin(), R.end(),
 				tmp.begin(), tmp.end(),                  
 				std::inserter(current_clique, current_clique.begin()));
-		printf("current vertice is %u\n", u);
+		// printf("current vertice is %u\n", u);
 
 		g->ns[l - 1] = 0;
 		
@@ -483,9 +471,38 @@ int main(int argc, char** argv) {
 		}
 		std::cout << "\n";
 	}
-	std::cout << "\n";
 
-	printf("Number of %u-cliques: %llu\n", k, n);
+	printf("Number of %u-cliques: %llu\n\n", k, n);
+
+	printf("Start to Filter out unfair clique...\n");
+
+	int threshold = 2;
+	int count0 = 0;
+	int count1 = 1;
+	std::vector<std::set<unsigned>> finalRes;
+	for (auto& clique : g->res) {
+		count0 = 0;
+		count1 = 0;
+		for (auto& i : clique) {
+			if (g->attributes[i] == 0) {
+				count0++;
+			} else {
+				count1++;
+			}
+		}
+		if (count0 >= threshold && count1 >= threshold) {
+			finalRes.push_back(clique);
+		}
+	}
+
+	for (auto& i : finalRes) {
+		for (auto& j : i) {
+			std::cout << j <<" ";
+		}
+		std::cout << "\n";
+	}
+
+	printf("Number of Weak fair %u-cliques: %llu\n\n", k, finalRes.size());
 
 	t2 = time(NULL);
 	printf("- Time = %ldh%ldm%lds\n", (t2-t1)/3600, ((t2-t1)%3600)/60, ((t2-t1)%60));
