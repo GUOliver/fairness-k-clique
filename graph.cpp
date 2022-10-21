@@ -13,16 +13,19 @@ To execute:
 	"edgelist.txt" should contain the graph: one edge on each line separated by a space.
 	"attribute.txt" should contain the attribute along with the vertice
 */
-#include <cstdio>
-#include <iostream>
-#include <ostream>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
-#include <vector>
+
+#include <cstdio>
 #include <set>
+#include <vector>
+#include <ostream>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
 // maximum number of edges for memory allocation, will increase if needed
 #define NLINKS 100000000
@@ -49,7 +52,6 @@ typedef struct {
 	//unsigned *map;// oldID newID correspondance
 
 	unsigned char* lab; // lab[i]: label of node i
-	std::vector<std::set<unsigned>> res;	// store the all the clique results
 } graph;
 
 void free_graph(graph* g, unsigned char k){
@@ -123,7 +125,6 @@ graph* read_edgelist(char* edgelist, char* attr_file){
 	fclose(file);
 	g->n++;	// node index starts from 0, thus +1 needed
 	g->edges = (edge*)realloc(g->edges, g->e * sizeof(edge));	// realloc the space to accommodate g->e(updated) # of edges !
-    printf("In reading edgelist, total vertices count: %d\n", g->n);
 	read_attribute_file(g, attr_file); // fill in attributes array in graph
 	return g;
 }
@@ -344,7 +345,7 @@ void mkspecial(graph* g, unsigned char k) {
 
 
 // n stored the number of k-cliques
-void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R) {
+void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R, std::ofstream& fout) {
 	unsigned end, u, v, w;
 	if (l == 2){
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
@@ -357,7 +358,13 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 				std::set<unsigned> target_clique;
 				std::set_union(R.begin(), R.end(), temp.begin(), temp.end(),
 					std::inserter(target_clique, target_clique.begin()));
-				g->res.push_back(target_clique);
+				// ==========================================================================================
+				// Write the output clique to local disk to reduce crazy memory increment
+				for (auto& i : target_clique) {
+					fout << i << ' ';
+				}
+				fout << '\n';
+				// ==========================================================================================
 				// NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only) !!
 				(*n)++; 
 			}
@@ -402,7 +409,7 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R)
 			}
 		}
 
-		kclique(l - 1, g, n, current_clique);
+		kclique(l - 1, g, n, current_clique, fout);
 		
 		//restoring labels
 		for (unsigned j = 0; j < g->ns[l-1]; j++){
@@ -462,47 +469,36 @@ int main(int argc, char** argv) {
 
 	n = 0;
 	std::set<unsigned> R;
-	kclique(k, g, &n, R);	 // list all k-cliques
-	std::cout << "result size is " << g->res.size() << std::endl;
-
-	for (auto& i : g->res) {
-		for (auto& j : i) {
-			std::cout << j <<" ";
-		}
-		std::cout << "\n";
-	}
+	std::ofstream fout("result.txt");
+	kclique(k, g, &n, R, fout);	 // list all k-cliques
+	std::cout << "result size is " << n << std::endl;
+	fout.close();
 
 	printf("Number of %u-cliques: %llu\n\n", k, n);
 
 	printf("Start to Filter out unfair clique...\n");
 
-	int threshold = 2;
-	int count0 = 0;
-	int count1 = 1;
-	std::vector<std::set<unsigned>> finalRes;
-	for (auto& clique : g->res) {
-		count0 = 0;
-		count1 = 0;
-		for (auto& i : clique) {
-			if (g->attributes[i] == 0) {
-				count0++;
-			} else {
-				count1++;
-			}
+	int threshold = 3;
+	std::ifstream cliquesFile("result.txt");
+	std::ofstream outputFile("result_filtered.txt");
+	std::string clique;
+	while (std::getline(cliquesFile, clique)) {
+		std::istringstream is(clique);
+		
+		int count0 = 0;
+		int count1 = 0;
+		unsigned vertice;
+		while( is >> vertice ) {
+			g->attributes[vertice] == 0 ? count0++ : count1++;
 		}
 		if (count0 >= threshold && count1 >= threshold) {
-			finalRes.push_back(clique);
+			outputFile << clique << std::endl;
 		}
 	}
+	cliquesFile.close();
+	outputFile.close();
 
-	for (auto& i : finalRes) {
-		for (auto& j : i) {
-			std::cout << j <<" ";
-		}
-		std::cout << "\n";
-	}
-
-	printf("Number of Weak fair %u-cliques: %llu\n\n", k, finalRes.size());
+	// printf("Number of Weak fair %u-cliques: %llu\n\n", k, finalRes.size());
 
 	t2 = time(NULL);
 	printf("- Time = %ldh%ldm%lds\n", (t2-t1)/3600, ((t2-t1)%3600)/60, ((t2-t1)%60));

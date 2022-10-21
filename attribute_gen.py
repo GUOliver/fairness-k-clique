@@ -5,7 +5,7 @@ import sys
 this file used to generator attributes for unlimited node
 
 notice:
-the commond line is:
+For example, to test on Wikitalk.txt, the commond line is:
 python3 attribute_gen.py number_of_node number_of_attributes
 
 '''
@@ -18,7 +18,7 @@ N_node = int(sys.argv[1])
 N_attribute = int(sys.argv[2])
 
 f = open("attribute.txt", "w")
-for i in range(0, N_node):
+for i in range(N_node):
     f.write(str(i) + ' ' + str(random.randint(0, N_attribute - 1)) + '\n')
 
 f.close()
