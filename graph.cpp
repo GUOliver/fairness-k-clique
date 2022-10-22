@@ -359,7 +359,6 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 				std::set_union(R.begin(), R.end(), temp.begin(), temp.end(),
 					std::inserter(target_clique, target_clique.begin()));
 				// ==========================================================================================
-				// Write the output clique to local disk to reduce crazy memory increment
 				int count0 = 0;
 				int count1 = 0;				
 				for (auto& v : target_clique) {
