@@ -345,7 +345,8 @@ void mkspecial(graph* g, unsigned char k) {
 
 
 // n stored the number of k-cliques
-void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::set<unsigned>& R, std::ofstream& fout) {
+// void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::set<unsigned>& R, std::ofstream& fout) {
+void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::set<unsigned>& R) {
 	if (l == 2){
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			unsigned u = g->sub[2][i];
@@ -366,14 +367,15 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 				}
 				
 				if (count0 >= threshold && count1 >= threshold) {
-					for (auto& v : target_clique) {
-						fout << v << " ";
-					}
-					fout << "\n";
+					(*n)++; 
+					// for (auto& v : target_clique) {
+					// 	fout << v << " ";
+					// }
+					// fout << "\n";
 				}
 				// ==========================================================================================
 				// NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only) !!
-				(*n)++; 
+				
 			}
 		}
 		return;
@@ -416,7 +418,8 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 			}
 		}
 
-		kclique(l - 1, threshold, g, n, current_clique, fout);
+		// kclique(l - 1, threshold, g, n, current_clique, fout);
+		kclique(l - 1, threshold, g, n, current_clique);
 		
 		//restoring labels
 		for (unsigned j = 0; j < g->ns[l-1]; j++){
@@ -426,24 +429,6 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 	}
 }
 
-// void find_weak_fair_clique(graph* g, int threshold, std::ifstream& input, std::ofstream& output) {
-// 	int count0 = 0;
-// 	int count1 = 0;
-// 	unsigned vertice = 0;
-// 	std::string line;
-// 	while (std::getline(input, line)) {
-// 		std::cout << line << std::endl;
-// 		std::istringstream is(line);	// create string stream 
-// 		while( is >> vertice ) {
-// 			g->attributes[vertice] == 0 ? count0++ : count1++;
-// 		}
-// 		if (count0 >= threshold && count1 >= threshold) {
-// 			output << line << std::endl;
-// 		}
-// 		count0 = 0;
-// 		count1 = 0;
-// 	}
-// }
 
 int main(int argc, char** argv) {
 	if (argc < 4) {
@@ -495,10 +480,12 @@ int main(int argc, char** argv) {
 
 	n = 0;
 	std::set<unsigned> R;
-	std::ofstream resultFile("result.txt");
-	kclique(k, 2, g, &n, R, resultFile);	 // list all k-cliques
-	resultFile.close();
-	printf("Number of %u-cliques: %llu\n\n", k, n);
+	// std::ofstream resultFile("result.txt");
+	// kclique(k, 2, g, &n, R, resultFile);	 // list all k-cliques
+	kclique(k, 2, g, &n, R);
+	// resultFile.close();
+	// printf("Number of %u-cliques: %llu\n\n", k, n);
+	printf("Number of Weak Fair %u-cliques: %llu\n\n", k, n);
 
 	t2 = time(NULL);
 	printf("- Time = %ldh%ldm%lds\n", (t2-t1)/3600, ((t2-t1)%3600)/60, ((t2-t1)%60));
