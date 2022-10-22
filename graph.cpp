@@ -345,12 +345,11 @@ void mkspecial(graph* g, unsigned char k) {
 
 
 // n stored the number of k-cliques
-void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R, std::ofstream& fout) {
-	unsigned end, u, v, w;
+void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::set<unsigned>& R, std::ofstream& fout) {
 	if (l == 2){
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
-			u = g->sub[2][i];
-			end = g->cd[u] + g->d[2][u];
+			unsigned u = g->sub[2][i];
+			unsigned end = g->cd[u] + g->d[2][u];
 			// printf("u is %d, end is %d\n", u, end);
 			for (unsigned j = g->cd[u]; j < end; j++) {
 				// printf("u is %d, j is %d, g->adj[j] is %d\n", u, j, g->adj[j]);
@@ -360,10 +359,18 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R,
 					std::inserter(target_clique, target_clique.begin()));
 				// ==========================================================================================
 				// Write the output clique to local disk to reduce crazy memory increment
-				for (auto& i : target_clique) {
-					fout << i << ' ';
+				int count0 = 0;
+				int count1 = 0;				
+				for (auto& v : target_clique) {
+					g->attributes[v] == 0 ? count0++ : count1++;
 				}
-				fout << '\n';
+				
+				if (count0 >= threshold && count1 >= threshold) {
+					for (auto& v : target_clique) {
+						fout << v << " ";
+					}
+					fout << "\n";
+				}
 				// ==========================================================================================
 				// NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only) !!
 				(*n)++; 
@@ -374,7 +381,7 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R,
 
 	// loop over the vertices of G_l
 	for (unsigned i = 0; i < g->ns[l]; i++){
-		u = g->sub[l][i]; // get the current vertice
+		unsigned u = g->sub[l][i]; // get the current vertice
 
 		std::set<unsigned> tmp = {u};
 		std::set<unsigned> current_clique;
@@ -385,9 +392,9 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R,
 
 		g->ns[l - 1] = 0;
 		
-		end = g->cd[u] + g->d[l][u];	// whole cumulative degree count from vertice 0 to u
+		unsigned end = g->cd[u] + g->d[l][u];	// whole cumulative degree count from vertice 0 to u
 		for (unsigned j = g->cd[u]; j < end; j++){ // relabeling nodes and forming U
-			v = g->adj[j];
+			unsigned v = g->adj[j];
 			//if (g->lab[v]==l){
 			g->lab[v] = l - 1;	// mark v (neighbor of u) to l-1
 			g->sub[l - 1][g->ns[l - 1]++] = v;
@@ -396,10 +403,10 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R,
 		}
 
 		for (unsigned j = 0; j < g->ns[l-1]; j++){ // reodering adjacency list and computing new degrees
-			v = g->sub[l-1][j];
+			unsigned v = g->sub[l-1][j];
 			end = g->cd[v] + g->d[l][v];
 			for (unsigned k = g->cd[v]; k < end; k++){
-				w = g->adj[k];
+				unsigned w = g->adj[k];
 				if (g->lab[w] == l-1){
 					g->d[l-1][v]++;
 				} else{
@@ -409,15 +416,34 @@ void kclique(unsigned l, graph* g, unsigned long long* n, std::set<unsigned>& R,
 			}
 		}
 
-		kclique(l - 1, g, n, current_clique, fout);
+		kclique(l - 1, threshold, g, n, current_clique, fout);
 		
 		//restoring labels
 		for (unsigned j = 0; j < g->ns[l-1]; j++){
-			v = g->sub[l - 1][j];
+			unsigned v = g->sub[l - 1][j];
 			g->lab[v] = l;
 		}
 	}
 }
+
+// void find_weak_fair_clique(graph* g, int threshold, std::ifstream& input, std::ofstream& output) {
+// 	int count0 = 0;
+// 	int count1 = 0;
+// 	unsigned vertice = 0;
+// 	std::string line;
+// 	while (std::getline(input, line)) {
+// 		std::cout << line << std::endl;
+// 		std::istringstream is(line);	// create string stream 
+// 		while( is >> vertice ) {
+// 			g->attributes[vertice] == 0 ? count0++ : count1++;
+// 		}
+// 		if (count0 >= threshold && count1 >= threshold) {
+// 			output << line << std::endl;
+// 		}
+// 		count0 = 0;
+// 		count1 = 0;
+// 	}
+// }
 
 int main(int argc, char** argv) {
 	if (argc < 4) {
@@ -469,36 +495,10 @@ int main(int argc, char** argv) {
 
 	n = 0;
 	std::set<unsigned> R;
-	std::ofstream fout("result.txt");
-	kclique(k, g, &n, R, fout);	 // list all k-cliques
-	std::cout << "result size is " << n << std::endl;
-	fout.close();
-
+	std::ofstream resultFile("result.txt");
+	kclique(k, 2, g, &n, R, resultFile);	 // list all k-cliques
+	resultFile.close();
 	printf("Number of %u-cliques: %llu\n\n", k, n);
-
-	printf("Start to Filter out unfair clique...\n");
-
-	int threshold = 3;
-	std::ifstream cliquesFile("result.txt");
-	std::ofstream outputFile("result_filtered.txt");
-	std::string clique;
-	while (std::getline(cliquesFile, clique)) {
-		std::istringstream is(clique);
-		
-		int count0 = 0;
-		int count1 = 0;
-		unsigned vertice;
-		while( is >> vertice ) {
-			g->attributes[vertice] == 0 ? count0++ : count1++;
-		}
-		if (count0 >= threshold && count1 >= threshold) {
-			outputFile << clique << std::endl;
-		}
-	}
-	cliquesFile.close();
-	outputFile.close();
-
-	// printf("Number of Weak fair %u-cliques: %llu\n\n", k, finalRes.size());
 
 	t2 = time(NULL);
 	printf("- Time = %ldh%ldm%lds\n", (t2-t1)/3600, ((t2-t1)%3600)/60, ((t2-t1)%60));
