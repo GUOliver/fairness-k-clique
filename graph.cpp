@@ -49,9 +49,11 @@ typedef struct {
 	unsigned* cd; // cumulative degree: (starts with 0) length = n+1
 	unsigned* adj; // truncated list of neighbors
 	unsigned* rank; // ranking of the nodes according to degeneracy ordering -> size of n
-	//unsigned *map;// oldID newID correspondance
-
 	unsigned char* lab; // lab[i]: label of node i
+
+	unsigned long long kclique_counter = 0;
+	unsigned long long kclique_wf_counter = 0;
+	unsigned long long kclique_rf_counter = 0;
 } graph;
 
 void free_graph(graph* g, unsigned char k){
@@ -312,7 +314,7 @@ void mkspecial(graph* g, unsigned char k) {
 	unsigned char* lab = (unsigned char*)malloc(g->n * sizeof(unsigned char));
 	for (unsigned i = 1; i < g->n + 1; i++) {
 		g->cd[i] = g->cd[i - 1] + d[i - 1];
-		max = (max > d[i - 1]) ? max : d[i - 1];
+		max = (max > d[i - 1]) ? max : d[i - 1];																																		
 		sub[ns++] = i - 1;
 		d[i - 1] = 0;
 		lab[i - 1] = k;
@@ -343,10 +345,8 @@ void mkspecial(graph* g, unsigned char k) {
 	g->lab = lab;
 }
 
-
-// n stored the number of k-cliques
 // void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::set<unsigned>& R, std::ofstream& fout) {
-void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::set<unsigned>& R) {
+void kclique(graph* g, unsigned l, unsigned threshold, std::set<unsigned>& R) {
 	if (l == 2){
 		for (unsigned i = 0; i < g->ns[2]; i++) { // loop through all the nodes in the subgraph
 			unsigned u = g->sub[2][i];
@@ -358,7 +358,7 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 				std::set<unsigned> target_clique;
 				std::set_union(R.begin(), R.end(), temp.begin(), temp.end(),
 					std::inserter(target_clique, target_clique.begin()));
-				// ==========================================================================================
+
 				int count0 = 0;
 				int count1 = 0;				
 				for (auto& v : target_clique) {
@@ -366,14 +366,17 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 				}
 				
 				if (count0 >= threshold && count1 >= threshold) {
-					(*n)++; 
+					(g->kclique_wf_counter)++;
+					if (g->kclique_wf_counter % 10000 == 0) {
+						std::cout << "Update n value: " << g->kclique_wf_counter << "\n";
+					}
 					// for (auto& v : target_clique) {
 					// 	fout << v << " ";
 					// }
 					// fout << "\n";
 				}
-				// ==========================================================================================
-				// NOTE THAT WE COULD DO (*n)+=g->d[2][u] to be much faster (for counting only) !!
+				(g->kclique_counter)++;
+				// NOTE THAT WE COULD DO (g->kclique_counter) += g->d[2][u] to be much faster (for counting only) !!
 				
 			}
 		}
@@ -418,7 +421,7 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 		}
 
 		// kclique(l - 1, threshold, g, n, current_clique, fout);
-		kclique(l - 1, threshold, g, n, current_clique);
+		kclique(g, l - 1, threshold, current_clique);
 		
 		//restoring labels
 		for (unsigned j = 0; j < g->ns[l-1]; j++){
@@ -431,25 +434,25 @@ void kclique(unsigned l, int threshold, graph* g, unsigned long long* n, std::se
 
 int main(int argc, char** argv) {
 	if (argc < 4) {
-		printf("Not enough args: ./graph k edgelist.txt attributes.txt \n");
+		printf("Not enough args: ./graph k threshold edgelist.txt attributes.txt \n");
 		return 0;
 	}
 
 	graph* g; // declare a graph g
 	unsigned char k = atoi(argv[1]);
-	unsigned long long n;
+	unsigned threshold = atoi(argv[2]);
 
 	time_t t0,t1,t2;
 	t1 = time(NULL);
 	t0 = t1;
 	
-	printf("Reading graph from file %s in edgelist format\n", argv[2]);
+	printf("Reading graph from file %s in edgelist format\n", argv[3]);
 	fflush(stdout);
 
-	printf("Reading attribute file from file %s\n", argv[3]);
+	printf("Reading attribute file from file %s\n", argv[4]);
 	fflush(stdout);
 
-	g = read_edgelist(argv[2], argv[3]);
+	g = read_edgelist(argv[3], argv[4]);
 	fflush(stdout);
 
 	t2 = time(NULL);
@@ -477,14 +480,14 @@ int main(int argc, char** argv) {
 	printf("Iterate over all cliques\n");
 	fflush(stdout);
 
-	n = 0;
 	std::set<unsigned> R;
 	// std::ofstream resultFile("result.txt");
 	// kclique(k, 2, g, &n, R, resultFile);	 // list all k-cliques
-	kclique(k, 2, g, &n, R);
+	kclique(g, k, threshold, R);
 	// resultFile.close();
-	// printf("Number of %u-cliques: %llu\n\n", k, n);
-	printf("Number of Weak Fair %u-cliques: %llu\n\n", k, n);
+	printf("Number of Weak Fair %u-cliques with threshold %d: %llu\n\n", k, threshold, g->kclique_wf_counter);
+	printf("Number of %u-cliques: %llu\n\n", k, g->kclique_counter);
+	printf("WFKclique percentage: %.2f\n\n", (double)(g->kclique_wf_counter)/(double)(g->kclique_counter));
 
 	t2 = time(NULL);
 	printf("- Time = %ldh%ldm%lds\n", (t2-t1)/3600, ((t2-t1)%3600)/60, ((t2-t1)%60));
